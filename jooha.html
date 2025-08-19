@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>시그 검색기</title>
-    <style>
+   <style>
         * {
             margin: 0;
             padding: 0;
@@ -14,8 +14,8 @@
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #2c3e50;
-            color: #ecf0f1;
+            background: #fff0f6; /* 연핑크 */
+            color: #d6336c;      /* 진한 핑크 */
             padding: 2rem;
             min-height: 100vh
         }
@@ -23,10 +23,10 @@
         .main-wrapper {
             max-width: 70rem;
             margin: auto;
-            background: linear-gradient(145deg, #34495e, #2c3e50);
+            background: #fff; /* 화이트 */
             border-radius: 1rem;
             padding: 2.5rem;
-            box-shadow: 0 1rem 3rem rgba(0, 0, 0, .3)
+            box-shadow: 0 1rem 3rem rgba(214, 51, 108, 0.08)
         }
         
         .header {
@@ -34,15 +34,16 @@
             margin-bottom: 2rem;
             font-size: 2rem;
             font-weight: 300;
-            letter-spacing: 2px
+            letter-spacing: 2px;
+            color: #d6336c; /* 진한 핑크 */
         }
         
         .finder-panel {
-            background: rgba(52, 73, 94, .6);
+            background: #ffe0ef; /* 연핑크 */
             padding: 1.5rem;
             border-radius: .5rem;
             margin-bottom: 1.5rem;
-            border: 1px solid #4a5a6a
+            border: 1px solid #ffb3c6
         }
         
         .search-group {
@@ -56,17 +57,17 @@
             flex: 1;
             min-width: 20rem;
             padding: .75rem 1rem;
-            background: #34495e;
-            border: 2px solid #4a5a6a;
+            background: #fff0f6;
+            border: 2px solid #ffb3c6;
             border-radius: .5rem;
-            color: #ecf0f1;
+            color: #d6336c;
             font-size: 1rem
         }
         
         .input-field:focus {
             outline: none;
-            border-color: #3498db;
-            box-shadow: 0 0 10px rgba(52, 152, 219, .3)
+            border-color: #d6336c;
+            box-shadow: 0 0 10px rgba(214, 51, 108, .15)
         }
         
         .btn {
@@ -79,12 +80,12 @@
         }
         
         .btn-secondary {
-            background: #95a5a6;
+            background: #ffb3c6;
             color: #fff
         }
         
         .btn-secondary:hover {
-            background: #7f8c8d
+            background: #d6336c
         }
         
         .info-bar {
@@ -92,42 +93,44 @@
             justify-content: space-between;
             margin-bottom: 1rem;
             font-size: .9rem;
-            color: #bdc3c7;
+            color: #d6336c;
             gap: 1rem;
             flex-wrap: wrap
         }
         
         .data-grid {
-            background: #34495e;
+            background: #fff0f6;
             border-radius: .5rem;
             overflow: hidden;
-            box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .2);
+            box-shadow: 0 .5rem 1rem rgba(214, 51, 108, .08);
             max-height: 400px;
             overflow-y: auto
         }
         
         .grid-header {
-            background: #2c3e50;
+            background: #ffe0ef;
             display: grid;
             grid-template-columns: 80px 1fr;
             padding: 1rem;
             font-weight: 600;
-            border-bottom: 1px solid #4a5a6a;
+            border-bottom: 1px solid #ffb3c6;
             position: sticky;
             top: 0;
-            z-index: 10
+            z-index: 10;
+            color: #d6336c;
         }
         
         .grid-row {
             display: grid;
             grid-template-columns: 80px 1fr;
             padding: .75rem 1rem;
-            border-bottom: 1px solid #4a5a6a;
-            transition: background .2s
+            border-bottom: 1px solid #ffb3c6;
+            transition: background .2s;
+            background: #fff;
         }
         
         .grid-row:hover {
-            background: rgba(52, 152, 219, .1)
+            background: #ffe0ef
         }
         
         .grid-row:last-child {
@@ -137,7 +140,7 @@
         .number-cell {
             text-align: center;
             font-weight: 600;
-            color: #3498db
+            color: #d6336c
         }
         
         .title-cell {
@@ -145,8 +148,8 @@
         }
         
         .match-highlight {
-            background: #f39c12;
-            color: #2c3e50;
+            background: #ffd6e0;
+            color: #d6336c;
             padding: 2px 4px;
             border-radius: 3px;
             font-weight: 600
@@ -155,7 +158,7 @@
         .empty-state {
             text-align: center;
             padding: 3rem;
-            color: #7f8c8d;
+            color: #ffb3c6;
             font-size: 1.1rem
         }
         
@@ -163,7 +166,8 @@
             content: "♪";
             display: block;
             font-size: 3rem;
-            margin-bottom: 1rem
+            margin-bottom: 1rem;
+            color: #ffb3c6;
         }
         /* 스크롤바 스타일링 */
         
@@ -172,17 +176,17 @@
         }
         
         .data-grid::-webkit-scrollbar-track {
-            background: #2c3e50;
+            background: #ffe0ef;
             border-radius: 4px
         }
         
         .data-grid::-webkit-scrollbar-thumb {
-            background: #4a5a6a;
+            background: #ffb3c6;
             border-radius: 4px
         }
         
         .data-grid::-webkit-scrollbar-thumb:hover {
-            background: #5a6a7a
+            background: #d6336c
         }
         
         @media (max-width:560px) {
