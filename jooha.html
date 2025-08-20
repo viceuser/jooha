@@ -321,7 +321,7 @@
             }
             async loadMusicData() {
                 try {
-                    const response = await fetch('/list.json');
+                    const response = await fetch('./list.json');
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
