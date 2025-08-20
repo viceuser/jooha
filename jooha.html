@@ -278,36 +278,23 @@
             }
 
             async loadMusicData() {
-                let candidates = [];
                 try {
-                    const params = new URLSearchParams(location.search);
-                    const base = params.get('list') || './list.json';
-                    const ts = `t=${Date.now()}`;
-                    const addBuster = (u) => u + (u.includes('?') ? '&' : '?') + ts;
-                    candidates = /^https?:\/\//i.test(base)
-                        ? [addBuster(base)]
-                        : [
-                            addBuster(base),
-                            addBuster('./list.json'),
-                            addBuster('list.json'),
-                            addBuster('../list.json'),
-                            addBuster('/list.json')
-                        ];
-
-                    const data = await this.fetchJsonCandidates(candidates);
+                    const response = await fetch('./list.json', { cache: 'no-cache' });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    const data = await response.json();
                     if (!Array.isArray(data)) throw new Error('list.json 형식 오류');
                     this.musicData = data;
                     this.currentResults = [...this.musicData];
                     return;
                 } catch (error) {
                     console.warn('list.json 로드 실패:', error);
-                    if (location.protocol === 'file:') {
-                        this.showLoadError('파일로 직접 열면 목록 파일을 불러올 수 없습니다. 간단 서버로 열어주세요. (예: python -m http.server)');
-                    } else {
-                        this.showLoadError(`목록 파일(list.json)을 불러오지 못했습니다.\n시도 경로:\n${candidates.join('\n')}\n오류: ${error.message}`);
-                    }
+                    const isFile = typeof location !== 'undefined' && location.protocol === 'file:';
+                    this.showLoadError(isFile ? '파일로 직접 열면 목록 파일을 불러올 수 없습니다. 간단 서버로 열어주세요. (예: python -m http.server)' : '목록 파일(list.json)을 불러오지 못했습니다. 경로/서버 설정을 확인하세요.');
+                    this.musicData = [];
+                    this.currentResults = [];
+                    return;
                 }
-                this.currentResults = [...this.musicData];
+                
             }
 
             async fetchJsonCandidates(urls) {
