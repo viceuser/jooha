@@ -279,7 +279,7 @@
 
             async loadMusicData() {
                 try {
-                    const response = await fetch('./list.json', { cache: 'no-cache' });
+                    const response = await fetch('/list.json', { cache: 'no-cache' });
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     const data = await response.json();
                     if (!Array.isArray(data)) throw new Error('list.json 형식 오류');
