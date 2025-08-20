@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>시그 검색기</title>
-   <style>
+    <style>
         * {
             margin: 0;
             padding: 0;
@@ -14,8 +14,10 @@
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #fff0f6; /* 연핑크 */
-            color: #d6336c;      /* 진한 핑크 */
+            background: #fff0f6;
+            /* 연핑크 */
+            color: #d6336c;
+            /* 진한 핑크 */
             padding: 2rem;
             min-height: 100vh
         }
@@ -23,7 +25,8 @@
         .main-wrapper {
             max-width: 70rem;
             margin: auto;
-            background: #fff; /* 화이트 */
+            background: #fff;
+            /* 화이트 */
             border-radius: 1rem;
             padding: 2.5rem;
             box-shadow: 0 1rem 3rem rgba(214, 51, 108, 0.08)
@@ -35,11 +38,13 @@
             font-size: 2rem;
             font-weight: 300;
             letter-spacing: 2px;
-            color: #d6336c; /* 진한 핑크 */
+            color: #d6336c;
+            /* 진한 핑크 */
         }
         
         .finder-panel {
-            background: #ffe0ef; /* 연핑크 */
+            background: #ffe0ef;
+            /* 연핑크 */
             padding: 1.5rem;
             border-radius: .5rem;
             margin-bottom: 1.5rem;
@@ -169,6 +174,44 @@
             margin-bottom: 1rem;
             color: #ffb3c6;
         }
+        
+        .loading-state {
+            text-align: center;
+            padding: 3rem;
+            color: #d6336c;
+            font-size: 1.1rem
+        }
+        
+        .loading-state::before {
+            content: "⏳";
+            display: block;
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            animation: spin 1s linear infinite;
+        }
+        
+        .error-state {
+            text-align: center;
+            padding: 3rem;
+            color: #ff6b6b;
+            font-size: 1.1rem
+        }
+        
+        .error-state::before {
+            content: "⚠️";
+            display: block;
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
         /* 스크롤바 스타일링 */
         
         .data-grid::-webkit-scrollbar {
@@ -195,15 +238,38 @@
                 grid-template-columns: 60px 1fr
             }
         }
+
+        /* 모바일 인앱 브라우저 대응: 검색창/여백 축소 및 자동확대 방지 */
+        html, body { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+        @media (max-width:560px) {
+            body { padding: 1rem; }
+            .main-wrapper { padding: 1rem; }
+            .header { font-size: 1.5rem; margin-bottom: 1rem; }
+            .finder-panel { padding: 1rem; }
+            .search-group { gap: .5rem; }
+            .input-field {
+                min-width: 0;
+                width: 100%;
+                padding: .6rem .75rem;
+                font-size: 16px; /* iOS 인앱 확대 방지 */
+            }
+            .btn { padding: .6rem 1rem; }
+            .grid-header { padding: .75rem; }
+            .grid-row { padding: .6rem .75rem; }
+        }
+        @media (max-width:360px) {
+            body { padding: .75rem; }
+            .main-wrapper { padding: .75rem; }
+            .input-field { padding: .55rem .7rem; }
+        }
     </style>
 </head>
 
 <body>
     <div class="main-wrapper">
-          <div class="main-wrapper">
-            <div style="text-align:center; margin-bottom:1.5rem;">
-                <img src="logo.png" alt="로고" style="height:60px;" />
-            </div>
+        <div style="text-align:center; margin-bottom:1.5rem;">
+            <img src="logo.png" alt="로고" style="height:60px;" />
+        </div>
         <h1 class="header">시그 검색기</h1>
 
         <div class="finder-panel">
@@ -226,6 +292,8 @@
         </div>
 
         <div id="emptyMessage" class="empty-state" style="display:none">검색된 곡이 없습니다</div>
+        <div id="loadingMessage" class="loading-state" style="display:none">데이터를 불러오는 중...</div>
+        <div id="errorMessage" class="error-state" style="display:none">데이터를 불러오는 중 오류가 발생했습니다</div>
     </div>
 
     <script>
@@ -242,17 +310,41 @@
             }
 
             async init() {
-                await this.loadMusicData();
-                this.setupEvents();
-                const lastQuery = localStorage.getItem('mf:lastQuery') || '';
-                const input = document.getElementById('queryInput');
-                if (lastQuery) input.value = lastQuery;
-                this.performSearch();
-                this.focusSearchInput();
+                this.showLoading(true);
+                try {
+                    await this.loadMusicData();
+                    this.setupEvents();
+                    const lastQuery = localStorage.getItem('mf:lastQuery') || '';
+                    const input = document.getElementById('queryInput');
+                    if (lastQuery) input.value = lastQuery;
+                    this.performSearch();
+                    this.focusSearchInput();
+                } catch (error) {
+                    console.error('데이터 로드 실패:', error);
+                    this.showError(true);
+                } finally {
+                    this.showLoading(false);
+                }
             }
 
             async loadMusicData() {
-                // 수동 입력 데이터 (객체 배열: { id, title })
+                try {
+                    const response = await fetch('./list.json');
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    this.musicData = await response.json();
+                    this.currentResults = [...this.musicData];
+                } catch (error) {
+                    console.error('JSON 파일 로드 오류:', error);
+                    // 폴백: 하드코딩된 데이터 사용
+                    this.loadFallbackData();
+                }
+            }
+
+            loadFallbackData() {
+                console.warn('JSON 파일을 불러올 수 없어 폴백 데이터를 사용합니다.');
+                // 최소한의 폴백 데이터
                 this.musicData = [{
                     id: 49,
                     title: "피카츄"
@@ -270,623 +362,45 @@
                     id: 103,
                     title: "말해줘요"
                 }, {
-                    id: 104,
-                    title: "BAAM"
-                }, {
-                    id: 105,
-                    title: "바빠"
-                }, {
-                    id: 107,
-                    title: "무아"
-                }, {
-                    id: 108,
-                    title: "바나나차차"
-                }, {
-                    id: 109,
-                    title: "모찌송"
-                }, {
-                    id: 111,
-                    title: "슈퍼그럼요"
-                }, {
-                    id: 112,
-                    title: "진압해"
-                }, {
-                    id: 115,
-                    title: "이라이라"
-                }, {
-                    id: 116,
-                    title: "테디베어"
-                }, {
-                    id: 117,
-                    title: "캔디시프"
-                }, {
-                    id: 118,
-                    title: "스마트"
-                }, {
-                    id: 121,
-                    title: "패스트포워드"
-                }, {
-                    id: 122,
-                    title: "우치다"
-                }, {
-                    id: 123,
-                    title: "스티키"
-                }, {
-                    id: 124,
-                    title: "댄싱퀸",
-                    alias: ["발"]
-                }, {
-                    id: 125,
-                    title: "버터플라이"
-                }, {
-                    id: 128,
-                    title: "첫만남은 어려워"
-                }, {
-                    id: 133,
-                    title: "UP"
-                }, {
-                    id: 134,
-                    title: "여우"
-                }, {
-                    id: 135,
-                    title: "띵띵땅땅"
-                }, {
-                    id: 136,
-                    title: "핑크레이디"
-                }, {
-                    id: 138,
-                    title: "호시탐탐"
-                }, {
-                    id: 139,
-                    title: "너와의 모든 지금"
-                }, {
-                    id: 141,
-                    title: "빛을따라서"
-                }, {
-                    id: 142,
-                    title: "외모체크"
-                }, {
-                    id: 143,
-                    title: "잘자요아가씨"
-                }, {
-                    id: 144,
-                    title: "키티캣"
-                }, {
-                    id: 145,
-                    title: "홀드업"
-                }, {
-                    id: 147,
-                    title: "사쿠란보"
-                }, {
-                    id: 148,
-                    title: "구찌"
-                }, {
-                    id: 149,
-                    title: "아마겟돈"
-                }, {
-                    id: 151,
-                    title: "할말이 없네"
-                }, {
-                    id: 152,
-                    title: "고민중독"
-                }, {
-                    id: 155,
-                    title: "카리나닮았다"
-                }, {
-                    id: 156,
-                    title: "퍼킹뱅어"
-                }, {
-                    id: 158,
-                    title: "색소폰매직"
-                }, {
-                    id: 159,
-                    title: "영차"
-                }, {
-                    id: 160,
-                    title: "삐끼삐끼"
-                }, {
-                    id: 161,
-                    title: "포켓몬"
-                }, {
-                    id: 162,
-                    title: "아이라잌유"
-                }, {
-                    id: 164,
-                    title: "이멀전시"
-                }, {
-                    id: 165,
-                    title: "워터"
-                }, {
-                    id: 167,
-                    title: "까꿍REMIX"
-                }, {
-                    id: 170,
-                    title: "클락션"
-                }, {
-                    id: 171,
-                    title: "마라탕후루"
-                }, {
-                    id: 172,
-                    title: "위플래쉬"
-                }, {
-                    id: 173,
-                    title: "레디올낫"
-                }, {
-                    id: 174,
-                    title: "XXL"
-                }, {
-                    id: 177,
-                    title: "매니악"
-                }, {
-                    id: 178,
-                    title: "허리업"
-                }, {
-                    id: 180,
-                    title: "제로투"
-                }, {
-                    id: 181,
-                    title: "날라리"
-                }, {
-                    id: 182,
-                    title: "만트라"
-                }, {
-                    id: 183,
-                    title: "폼미쳤다"
-                }, {
-                    id: 183,
-                    title: "점프"
-                }, {
-                    id: 184,
-                    title: "러브쉐이크"
-                }, {
-                    id: 185,
-                    title: "왓이즈럽"
-                }, {
-                    id: 186,
-                    title: "왜요왜요"
-                }, {
-                    id: 187,
-                    title: "복고댄스"
-                }, {
-                    id: 188,
-                    title: "역도"
-                }, {
-                    id: 189,
-                    title: "도레미파솔라시도"
-                }, {
-                    id: 190,
-                    title: "파이팅해야지"
-                }, {
-                    id: 191,
-                    title: "스모크"
-                }, {
-                    id: 192,
-                    title: "스마일리"
-                }, {
-                    id: 193,
-                    title: "배드빌런"
-                }, {
-                    id: 194,
-                    title: "블루문"
-                }, {
-                    id: 195,
-                    title: "핫해"
-                }, {
-                    id: 197,
-                    title: "아가씨"
-                }, {
-                    id: 199,
-                    title: "간바레"
-                }, {
-                    id: 200,
-                    title: "슈파도파"
-                }, {
-                    id: 202,
-                    title: "킹받쥬"
-                }, {
-                    id: 203,
-                    title: "마그네틱"
-                }, {
-                    id: 215,
-                    title: "솜사탕"
-                }, {
-                    id: 221,
-                    title: "앙카"
-                }, {
-                    id: 222,
-                    title: "빌려온고양이"
-                }, {
-                    id: 223,
-                    title: "귀여워서 미안해"
-                }, {
-                    id: 224,
-                    title: "바우치"
-                }, {
-                    id: 225,
-                    title: "걸스네버다이"
-                }, {
-                    id: 226,
-                    title: "왠지"
-                }, {
                     id: 228,
                     title: "아파트"
                 }, {
-                    id: 229,
-                    title: "바람피면D지는거야"
-                }, {
-                    id: 232,
-                    title: "벌룬인러브"
-                }, {
-                    id: 242,
-                    title: "짠쿵쾅"
-                }, {
-                    id: 245,
-                    title: "큰거온다"
-                }, {
-                    id: 258,
-                    title: "오빠바이러스"
-                }, {
-                    id: 259,
-                    title: "네모네모"
-                }, {
-                    id: 263,
-                    title: "비밀정원"
-                }, {
-                    id: 272,
-                    title: "나루토"
-                }, {
-                    id: 277,
-                    title: "킥드럼베이스"
-                }, {
-                    id: 282,
-                    title: "팬서비스"
-                }, {
-                    id: 283,
-                    title: "푱푱"
-                }, {
-                    id: 284,
-                    title: "셀럽"
-                }, {
-                    id: 285,
-                    title: "홈스윗홈"
-                }, {
-                    id: 286,
-                    title: "라타타"
-                }, {
-                    id: 287,
-                    title: "DOOR"
-                }, {
-                    id: 288,
-                    title: "마티니"
-                }, {
-                    id: 289,
-                    title: "레블하트"
-                }, {
-                    id: 291,
-                    title: "롤러코스터"
-                }, {
-                    id: 292,
-                    title: "쿠니머신건"
-                }, {
-                    id: 293,
-                    title: "아이스크림"
-                }, {
-                    id: 294,
-                    title: "골든"
-                }, {
-                    id: 295,
-                    title: "이쿠욧"
-                }, {
-                    id: 296,
-                    title: "묵찌빠"
-                }, {
-                    id: 298,
-                    title: "우유"
-                }, {
-                    id: 299,
-                    title: "뱅뱅뱅"
-                }, {
-                    id: 300,
-                    title: "쿠니UP"
-                }, {
-                    id: 301,
-                    title: "로스트컨트롤"
-                }, {
-                    id: 302,
-                    title: "스파르타"
-                }, {
-                    id: 303,
-                    title: "팝핀주하"
-                }, {
-                    id: 309,
-                    title: "헨타이"
-                }, {
-                    id: 322,
-                    title: "마이백"
-                }, {
-                    id: 333,
-                    title: "인더클럽"
-                }, {
-                    id: 334,
-                    title: "두근두근"
-                }, {
-                    id: 345,
-                    title: "공주들아"
-                }, {
-                    id: 355,
-                    title: "붐붐베이스"
-                }, {
-                    id: 356,
-                    title: "할것"
-                }, {
-                    id: 360,
-                    title: "촉촉착착"
-                }, {
-                    id: 365,
-                    title: "나랑사귈래"
-                }, {
-                    id: 388,
-                    title: "썸머띵"
-                }, {
-                    id: 389,
-                    title: "라라라"
-                }, {
-                    id: 411,
-                    title: "샹하이로맨스"
-                }, {
-                    id: 415,
-                    title: "계엄령"
-                }, {
-                    id: 416,
-                    title: "베긴"
-                }, {
-                    id: 422,
-                    title: "누나가알려줄게"
-                }, {
-                    id: 424,
-                    title: "터미널"
-                }, {
-                    id: 425,
-                    title: "L.S.D"
-                }, {
-                    id: 455,
-                    title: "킵고잉"
-                }, {
-                    id: 478,
-                    title: "아르망디"
-                }, {
-                    id: 499,
-                    title: "사기캐"
-                }, {
-                    id: 501,
-                    title: "STEP"
-                }, {
-                    id: 502,
-                    title: "새드니스"
-                }, {
-                    id: 505,
-                    title: "샤카보"
-                }, {
-                    id: 525,
-                    title: "미니AMG"
-                }, {
-                    id: 538,
-                    title: "피에스타로카"
-                }, {
-                    id: 550,
-                    title: "황금솜사탕"
-                }, {
-                    id: 555,
-                    title: "살아있네"
-                }, {
-                    id: 577,
-                    title: "냉냉"
-                }, {
-                    id: 588,
-                    title: "오프더레코드"
-                }, {
-                    id: 599,
-                    title: "레이브러브"
-                }, {
-                    id: 600,
-                    title: "디저트리믹스"
-                }, {
-                    id: 623,
-                    title: "RUMBA"
-                }, {
-                    id: 638,
-                    title: "킬디스럽"
-                }, {
-                    id: 656,
-                    title: "SHAPE OF YOU"
-                }, {
-                    id: 666,
-                    title: "필더리듬"
-                }, {
-                    id: 675,
-                    title: "ON MY WAY"
-                }, {
-                    id: 688,
-                    title: "반포대교"
-                }, {
-                    id: 697,
-                    title: "최군팬수색대"
-                }, {
-                    id: 699,
-                    title: "크레이지인럽"
-                }, {
-                    id: 729,
-                    title: "웨이백홈"
-                }, {
-                    id: 900,
-                    title: "디스코테카"
-                }, {
-                    id: 999,
-                    title: "더 나잇"
-                }, {
-                    id: 1000,
-                    title: "쿠니랜드"
-                }, {
-                    id: 1002,
-                    title: "떠덩"
-                }, {
-                    id: 1004,
-                    title: "천상"
-                }, {
-                    id: 1007,
-                    title: "은민"
-                }, {
-                    id: 1014,
-                    title: "감나무개"
-                }, {
-                    id: 1025,
-                    title: "작은히호"
-                }, {
-                    id: 1027,
-                    title: "망르헨"
-                }, {
-                    id: 1028,
-                    title: "김리플"
-                }, {
-                    id: 1032,
-                    title: "서비"
-                }, {
-                    id: 1034,
-                    title: "날자"
-                }, {
-                    id: 1037,
-                    title: "오승환개"
-                }, {
-                    id: 1045,
-                    title: "슈퍼패스트포워드"
-                }, {
-                    id: 1052,
-                    title: "오이고추",
-                    alias: ["발충"]
-                }, {
-                    id: 1056,
-                    title: "해로움"
-                }, {
-                    id: 1057,
-                    title: "슈퍼잔바리",
-                    alias: ["까멘"]
-                }, {
-                    id: 1065,
-                    title: "소유욕충만"
-                }, {
-                    id: 1066,
-                    title: "좋은날"
-                }, {
-                    id: 1072,
-                    title: "까스",
-                    alias: ["까멘"]
-                }, {
-                    id: 1075,
-                    title: "크롱"
-                }, {
-                    id: 1084,
-                    title: "기쁨"
-                }, {
-                    id: 1095,
-                    title: "구름빵개"
-                }, {
-                    id: 1099,
-                    title: "개굴개"
-                }, {
-                    id: 1102,
-                    title: "부야"
-                }, {
-                    id: 1111,
-                    title: "바코드"
-                }, {
-                    id: 1135,
-                    title: "STAY"
-                }, {
-                    id: 1155,
-                    title: "오징어게임"
-                }, {
-                    id: 1177,
-                    title: "리멤버아워"
-                }, {
-                    id: 1190,
-                    title: "큰히호개"
-                }, {
-                    id: 1194,
-                    title: "역팬"
-                }, {
-                    id: 1212,
-                    title: "(신입)"
-                }, {
-                    id: 1222,
-                    title: "돈기브업"
-                }, {
-                    id: 1235,
-                    title: "킥섬어스"
-                }, {
-                    id: 1247,
-                    title: "큰AMG"
-                }, {
-                    id: 1333,
-                    title: "ASS UP"
-                }, {
-                    id: 1357,
-                    title: "유앤미"
-                }, {
-                    id: 1452,
-                    title: "BYTE"
-                }, {
-                    id: 1456,
-                    title: "크라잉온더"
-                }, {
-                    id: 1477,
-                    title: "레전드네버다이"
-                }, {
-                    id: 1500,
-                    title: "헨즈클럽"
-                }, {
-                    id: 1568,
-                    title: "만개화"
-                }, {
-                    id: 1697,
-                    title: "최군팬수색대"
-                }, {
-                    id: 1727,
-                    title: "큰까스"
-                }, {
-                    id: 1758,
-                    title: "BAZAAR"
-                }, {
-                    id: 1869,
-                    title: "체인투더리듬"
-                }, {
-                    id: 1925,
-                    title: "ATMOSPHERE"
-                }, {
-                    id: 2000,
-                    title: "뱅가드"
-                }, {
-                    id: 2056,
-                    title: "큰해로움"
-                }, {
-                    id: 2157,
-                    title: "아폴로"
-                }, {
-                    id: 2198,
-                    title: "타이미다운"
-                }, {
-                    id: 2222,
-                    title: "MARS"
-                }, {
-                    id: 2345,
-                    title: "LOVE IS GONE"
-                }, {
-                    id: 2522,
-                    title: "슈퍼amg"
-                }, {
-                    id: 28294,
-                    title: "소원권"
+                    id: 203,
+                    title: "마그네틱"
                 }];
                 this.currentResults = [...this.musicData];
+            }
+
+            showLoading(show) {
+                const loading = document.getElementById('loadingMessage');
+                const grid = document.getElementById('musicGrid');
+                const empty = document.getElementById('emptyMessage');
+                const error = document.getElementById('errorMessage');
+
+                if (show) {
+                    loading.style.display = 'block';
+                    grid.style.display = 'none';
+                    empty.style.display = 'none';
+                    error.style.display = 'none';
+                } else {
+                    loading.style.display = 'none';
+                }
+            }
+
+            showError(show) {
+                const error = document.getElementById('errorMessage');
+                const grid = document.getElementById('musicGrid');
+                const empty = document.getElementById('emptyMessage');
+                const loading = document.getElementById('loadingMessage');
+
+                if (show) {
+                    error.style.display = 'block';
+                    grid.style.display = 'none';
+                    empty.style.display = 'none';
+                    loading.style.display = 'none';
+                } else {
+                    error.style.display = 'none';
+                }
             }
 
             setupEvents() {
@@ -897,6 +411,7 @@
                     if (e.key === 'Escape') this.clearSearch();
                 });
             }
+
             performSearch() {
                 const query = document.getElementById('queryInput').value.trim();
                 localStorage.setItem('mf:lastQuery', query);
@@ -963,7 +478,6 @@
 
                 const frag = document.createDocumentFragment();
                 const isNum = /^\d+$/.test(highlightTerm);
-                const qNum = isNum ? parseInt(highlightTerm, 10) : null;
 
                 this.currentResults.forEach((track) => {
                     const row = document.createElement('div');
