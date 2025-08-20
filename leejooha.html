@@ -169,8 +169,42 @@
             margin-bottom: 1rem;
             color: #ffb3c6;
         }
-        /* 스크롤바 스타일링 */
         
+        .loading-state {
+            text-align: center;
+            padding: 3rem;
+            color: #d6336c;
+            font-size: 1.1rem
+        }
+        
+        .loading-state::before {
+            content: "⏳";
+            display: block;
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            animation: spin 1s linear infinite;
+        }
+        
+        .error-state {
+            text-align: center;
+            padding: 3rem;
+            color: #ff6b6b;
+            font-size: 1.1rem
+        }
+        
+        .error-state::before {
+            content: "⚠️";
+            display: block;
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* 스크롤바 스타일링 */
         .data-grid::-webkit-scrollbar {
             width: 8px
         }
@@ -195,39 +229,14 @@
                 grid-template-columns: 60px 1fr
             }
         }
-
-        /* 모바일 인앱 브라우저 대응: 검색창/여백 축소 및 자동확대 방지 */
-        html, body { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-        @media (max-width:560px) {
-            body { padding: 1rem; }
-            .main-wrapper { padding: 1rem; }
-            .header { font-size: 1.5rem; margin-bottom: 1rem; }
-            .finder-panel { padding: 1rem; }
-            .search-group { gap: .5rem; }
-            .input-field {
-                min-width: 0;
-                width: 100%;
-                padding: .6rem .75rem;
-                font-size: 16px; /* iOS 인앱 확대 방지 */
-            }
-            .btn { padding: .6rem 1rem; }
-            .grid-header { padding: .75rem; }
-            .grid-row { padding: .6rem .75rem; }
-        }
-        @media (max-width:360px) {
-            body { padding: .75rem; }
-            .main-wrapper { padding: .75rem; }
-            .input-field { padding: .55rem .7rem; }
-        }
     </style>
 </head>
 
 <body>
     <div class="main-wrapper">
-          <div class="main-wrapper">
-            <div style="text-align:center; margin-bottom:1.5rem;">
-                <img src="logo.png" alt="로고" style="height:60px;" />
-            </div>
+        <div style="text-align:center; margin-bottom:1.5rem;">
+            <img src="logo.png" alt="로고" style="height:60px;" />
+        </div>
         <h1 class="header">시그 검색기</h1>
 
         <div class="finder-panel">
@@ -241,8 +250,6 @@
             <span id="queryInfo" aria-live="polite"></span>
         </div>
 
-        <div id="loadError" style="display:none;color:#ff6b6b;font-size:.95rem;margin-bottom:.5rem;"></div>
-
         <div class="data-grid" id="musicGrid" role="region" aria-label="검색 결과">
             <div class="grid-header" role="row">
                 <div>갯수</div>
@@ -252,6 +259,8 @@
         </div>
 
         <div id="emptyMessage" class="empty-state" style="display:none">검색된 곡이 없습니다</div>
+        <div id="loadingMessage" class="loading-state" style="display:none">데이터를 불러오는 중...</div>
+        <div id="errorMessage" class="error-state" style="display:none">데이터를 불러오는 중 오류가 발생했습니다</div>
     </div>
 
     <script>
@@ -268,54 +277,82 @@
             }
 
             async init() {
-                await this.loadMusicData();
-                this.setupEvents();
-                const lastQuery = localStorage.getItem('mf:lastQuery') || '';
-                const input = document.getElementById('queryInput');
-                if (lastQuery) input.value = lastQuery;
-                this.performSearch();
-                this.focusSearchInput();
+                this.showLoading(true);
+                try {
+                    await this.loadMusicData();
+                    this.setupEvents();
+                    const lastQuery = localStorage.getItem('mf:lastQuery') || '';
+                    const input = document.getElementById('queryInput');
+                    if (lastQuery) input.value = lastQuery;
+                    this.performSearch();
+                    this.focusSearchInput();
+                } catch (error) {
+                    console.error('데이터 로드 실패:', error);
+                    this.showError(true);
+                } finally {
+                    this.showLoading(false);
+                }
             }
 
             async loadMusicData() {
                 try {
-                    const res = await fetch('./list.json', { cache: 'no-cache' });
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    const data = await res.json();
-                    if (!Array.isArray(data)) throw new Error('list.json 형식 오류');
-                    this.musicData = data;
-                } catch (e) {
-                    console.warn('list.json 로드 실패:', e);
-                    this.musicData = [];
-                    const el = document.getElementById('loadError');
-                    if (el) {
-                        const isFile = typeof location !== 'undefined' && location.protocol === 'file:';
-                        el.textContent = isFile
-                          ? '파일로 직접 열면 목록 파일을 불러올 수 없습니다. 간단 서버로 열어주세요. (예: python -m http.server)'
-                          : '목록 파일(list.json)을 불러오지 못했습니다. 경로/서버 설정을 확인하세요.';
-                        el.style.display = 'block';
+                    const response = await fetch('./music-data.json');
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
                     }
+                    this.musicData = await response.json();
+                    this.currentResults = [...this.musicData];
+                } catch (error) {
+                    console.error('JSON 파일 로드 오류:', error);
+                    // 폴백: 하드코딩된 데이터 사용
+                    this.loadFallbackData();
                 }
+            }
+
+            loadFallbackData() {
+                console.warn('JSON 파일을 불러올 수 없어 폴백 데이터를 사용합니다.');
+                // 최소한의 폴백 데이터
+                this.musicData = [
+                    { id: 49, title: "피카츄" },
+                    { id: 100, title: "whistle", alias: ["휘슬"] },
+                    { id: 101, title: "캥거루" },
+                    { id: 102, title: "괜찮아 딩딩" },
+                    { id: 103, title: "말해줘요" },
+                    { id: 228, title: "아파트" },
+                    { id: 203, title: "마그네틱" }
+                ];
                 this.currentResults = [...this.musicData];
             }
 
-            async fetchJsonCandidates(urls) {
-                for (const url of urls) {
-                    try {
-                        const res = await fetch(url, { cache: 'no-cache' });
-                        if (res.ok) return await res.json();
-                    } catch (e) {
-                        // 다음 후보로 진행
-                    }
+            showLoading(show) {
+                const loading = document.getElementById('loadingMessage');
+                const grid = document.getElementById('musicGrid');
+                const empty = document.getElementById('emptyMessage');
+                const error = document.getElementById('errorMessage');
+                
+                if (show) {
+                    loading.style.display = 'block';
+                    grid.style.display = 'none';
+                    empty.style.display = 'none';
+                    error.style.display = 'none';
+                } else {
+                    loading.style.display = 'none';
                 }
-                throw new Error('모든 후보 URL 요청 실패');
             }
 
-            showLoadError(message) {
-                const el = document.getElementById('loadError');
-                if (el) {
-                    el.textContent = message;
-                    el.style.display = 'block';
+            showError(show) {
+                const error = document.getElementById('errorMessage');
+                const grid = document.getElementById('musicGrid');
+                const empty = document.getElementById('emptyMessage');
+                const loading = document.getElementById('loadingMessage');
+                
+                if (show) {
+                    error.style.display = 'block';
+                    grid.style.display = 'none';
+                    empty.style.display = 'none';
+                    loading.style.display = 'none';
+                } else {
+                    error.style.display = 'none';
                 }
             }
 
@@ -327,6 +364,7 @@
                     if (e.key === 'Escape') this.clearSearch();
                 });
             }
+
             performSearch() {
                 const query = document.getElementById('queryInput').value.trim();
                 localStorage.setItem('mf:lastQuery', query);
@@ -393,7 +431,6 @@
 
                 const frag = document.createDocumentFragment();
                 const isNum = /^\d+$/.test(highlightTerm);
-                const qNum = isNum ? parseInt(highlightTerm, 10) : null;
 
                 this.currentResults.forEach((track) => {
                     const row = document.createElement('div');
