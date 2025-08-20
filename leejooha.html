@@ -229,6 +229,30 @@
                 grid-template-columns: 60px 1fr
             }
         }
+
+        /* 모바일 인앱 브라우저 대응: 검색창/여백 축소 및 자동확대 방지 */
+        html, body { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+        @media (max-width:560px) {
+            body { padding: 1rem; }
+            .main-wrapper { padding: 1rem; }
+            .header { font-size: 1.5rem; margin-bottom: 1rem; }
+            .finder-panel { padding: 1rem; }
+            .search-group { gap: .5rem; }
+            .input-field {
+                min-width: 0;
+                width: 100%;
+                padding: .6rem .75rem;
+                font-size: 16px; /* iOS 인앱 확대 방지 */
+            }
+            .btn { padding: .6rem 1rem; }
+            .grid-header { padding: .75rem; }
+            .grid-row { padding: .6rem .75rem; }
+        }
+        @media (max-width:360px) {
+            body { padding: .75rem; }
+            .main-wrapper { padding: .75rem; }
+            .input-field { padding: .55rem .7rem; }
+        }
     </style>
 </head>
 
