@@ -241,6 +241,8 @@
             <span id="queryInfo" aria-live="polite"></span>
         </div>
 
+        <div id="loadError" style="display:none;color:#ff6b6b;font-size:.95rem;margin-bottom:.5rem;"></div>
+
         <div class="data-grid" id="musicGrid" role="region" aria-label="검색 결과">
             <div class="grid-header" role="row">
                 <div>갯수</div>
@@ -277,19 +279,48 @@
 
             async loadMusicData() {
                 try {
-                    const response = await fetch('./list.json', { cache: 'no-cache' });
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    const data = await response.json();
+                    const params = new URLSearchParams(location.search);
+                    const base = params.get('list') || './list.json';
+                    const ts = `t=${Date.now()}`;
+                    const addBuster = (u) => u + (u.includes('?') ? '&' : '?') + ts;
+                    const candidates = /^https?:\/\//i.test(base)
+                        ? [addBuster(base)]
+                        : [addBuster(base), addBuster('./list.json'), addBuster('list.json'), addBuster('../list.json')];
+
+                    const data = await this.fetchJsonCandidates(candidates);
                     if (!Array.isArray(data)) throw new Error('list.json 형식 오류');
                     this.musicData = data;
                     this.currentResults = [...this.musicData];
                     return;
                 } catch (error) {
-                    console.warn('list.json 로드 실패, 내장 데이터로 계속합니다:', error);
-                
-               
-                };
+                    console.warn('list.json 로드 실패:', error);
+                    if (location.protocol === 'file:') {
+                        this.showLoadError('파일로 직접 열면 목록 파일을 불러올 수 없습니다. 간단 서버로 열어주세요. (예: python -m http.server)');
+                    } else {
+                        this.showLoadError('목록 파일(list.json)을 불러오지 못했습니다. 경로/서버 설정을 확인하세요.');
+                    }
+                }
                 this.currentResults = [...this.musicData];
+            }
+
+            async fetchJsonCandidates(urls) {
+                for (const url of urls) {
+                    try {
+                        const res = await fetch(url, { cache: 'no-cache' });
+                        if (res.ok) return await res.json();
+                    } catch (e) {
+                        // 다음 후보로 진행
+                    }
+                }
+                throw new Error('모든 후보 URL 요청 실패');
+            }
+
+            showLoadError(message) {
+                const el = document.getElementById('loadError');
+                if (el) {
+                    el.textContent = message;
+                    el.style.display = 'block';
+                }
             }
 
             setupEvents() {
