@@ -1,11 +1,10 @@
 <!DOCTYPE html>
 <html lang="ko">
-
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>시그 검색기</title>
-   <style>
+    <style>
         * {
             margin: 0;
             padding: 0;
@@ -14,8 +13,10 @@
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #fff0f6; /* 연핑크 */
-            color: #d6336c;      /* 진한 핑크 */
+            background: #fff0f6;
+            /* 연핑크 */
+            color: #d6336c;
+            /* 진한 핑크 */
             padding: 2rem;
             min-height: 100vh
         }
@@ -23,7 +24,8 @@
         .main-wrapper {
             max-width: 70rem;
             margin: auto;
-            background: #fff; /* 화이트 */
+            background: #fff;
+            /* 화이트 */
             border-radius: 1rem;
             padding: 2.5rem;
             box-shadow: 0 1rem 3rem rgba(214, 51, 108, 0.08)
@@ -35,11 +37,13 @@
             font-size: 2rem;
             font-weight: 300;
             letter-spacing: 2px;
-            color: #d6336c; /* 진한 핑크 */
+            color: #d6336c;
+            /* 진한 핑크 */
         }
         
         .finder-panel {
-            background: #ffe0ef; /* 연핑크 */
+            background: #ffe0ef;
+            /* 연핑크 */
             padding: 1.5rem;
             border-radius: .5rem;
             margin-bottom: 1.5rem;
@@ -169,6 +173,44 @@
             margin-bottom: 1rem;
             color: #ffb3c6;
         }
+        
+        .loading-state {
+            text-align: center;
+            padding: 3rem;
+            color: #d6336c;
+            font-size: 1.1rem
+        }
+        
+        .loading-state::before {
+            content: "⏳";
+            display: block;
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            animation: spin 1s linear infinite;
+        }
+        
+        .error-state {
+            text-align: center;
+            padding: 3rem;
+            color: #ff6b6b;
+            font-size: 1.1rem
+        }
+        
+        .error-state::before {
+            content: "⚠️";
+            display: block;
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
         /* 스크롤바 스타일링 */
         
         .data-grid::-webkit-scrollbar {
@@ -224,25 +266,19 @@
 
 <body>
     <div class="main-wrapper">
-          <div class="main-wrapper">
-            <div style="text-align:center; margin-bottom:1.5rem;">
-                <img src="logo.png" alt="로고" style="height:60px;" />
-            </div>
+        <div style="text-align:center; margin-bottom:1.5rem;">
+            <img src="logo.png" alt="로고" style="height:60px;" />
+        </div>
         <h1 class="header">시그 검색기</h1>
-
         <div class="finder-panel">
             <div class="search-group">
                 <input type="text" class="input-field" id="queryInput" placeholder="입력하는 즉시 검색됩니다 (제목 또는 갯수)" aria-label="곡 제목 또는 갯수 검색" autocomplete="off" />
             </div>
         </div>
-
         <div class="info-bar">
             <span id="resultCount" aria-live="polite">총 0개의 곡이 있습니다.</span>
             <span id="queryInfo" aria-live="polite"></span>
         </div>
-
-        <div id="loadError" style="display:none;color:#ff6b6b;font-size:.95rem;margin-bottom:.5rem;"></div>
-
         <div class="data-grid" id="musicGrid" role="region" aria-label="검색 결과">
             <div class="grid-header" role="row">
                 <div>갯수</div>
@@ -250,10 +286,10 @@
             </div>
             <div id="gridContent"></div>
         </div>
-
         <div id="emptyMessage" class="empty-state" style="display:none">검색된 곡이 없습니다</div>
+        <div id="loadingMessage" class="loading-state" style="display:none">데이터를 불러오는 중...</div>
+        <div id="errorMessage" class="error-state" style="display:none">데이터를 불러오는 중 오류가 발생했습니다</div>
     </div>
-
     <script>
         class MusicFinder {
             constructor() {
@@ -266,60 +302,95 @@
                 });
                 this.init();
             }
-
             async init() {
-                await this.loadMusicData();
-                this.setupEvents();
-                const lastQuery = localStorage.getItem('mf:lastQuery') || '';
-                const input = document.getElementById('queryInput');
-                if (lastQuery) input.value = lastQuery;
-                this.performSearch();
-                this.focusSearchInput();
+                this.showLoading(true);
+                try {
+                    await this.loadMusicData();
+                    this.setupEvents();
+                    const lastQuery = localStorage.getItem('mf:lastQuery') || '';
+                    const input = document.getElementById('queryInput');
+                    if (lastQuery) input.value = lastQuery;
+                    this.performSearch();
+                    this.focusSearchInput();
+                } catch (error) {
+                    console.error('데이터 로드 실패:', error);
+                    this.showError(true);
+                } finally {
+                    this.showLoading(false);
+                }
             }
-
             async loadMusicData() {
                 try {
-                    const response = await fetch('/list.json', { cache: 'no-cache' });
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    const data = await response.json();
-                    if (!Array.isArray(data)) throw new Error('list.json 형식 오류');
-                    this.musicData = data;
-                    this.currentResults = [...this.musicData];
-                    return;
-                } catch (error) {
-                    console.warn('list.json 로드 실패:', error);
-                    const isFile = typeof location !== 'undefined' && location.protocol === 'file:';
-                    this.showLoadError(isFile ? '파일로 직접 열면 목록 파일을 불러올 수 없습니다. 간단 서버로 열어주세요. (예: python -m http.server)' : '목록 파일(list.json)을 불러오지 못했습니다. 경로/서버 설정을 확인하세요.');
-                    this.musicData = [];
-                    this.currentResults = [];
-                    return;
-                }
-                
-            }
-
-            async fetchJsonCandidates(urls) {
-                for (const url of urls) {
-                    try {
-                        const res = await fetch(url, { cache: 'no-cache' });
-                        if (res.ok) return await res.json();
-                    } catch (e) {
-                        // 다음 후보로 진행
+                    const response = await fetch('./list.json');
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
                     }
-                }
-                throw new Error('모든 후보 URL 요청 실패');
-            }
-
-            showLoadError(message) {
-                const el = document.getElementById('loadError');
-                if (el) {
-                    el.textContent = message;
-                    el.style.display = 'block';
+                    this.musicData = await response.json();
+                    this.currentResults = [...this.musicData];
+                } catch (error) {
+                    console.error('JSON 파일 로드 오류:', error);
+                    // 폴백: 하드코딩된 데이터 사용
+                    this.loadFallbackData();
                 }
             }
-
+            loadFallbackData() {
+                console.warn('JSON 파일을 불러올 수 없어 폴백 데이터를 사용합니다.');
+                // 최소한의 폴백 데이터
+                this.musicData = [{
+                    id: 49,
+                    title: "피카츄"
+                }, {
+                    id: 100,
+                    title: "whistle",
+                    alias: ["휘슬"]
+                }, {
+                    id: 101,
+                    title: "캥거루"
+                }, {
+                    id: 102,
+                    title: "괜찮아 딩딩"
+                }, {
+                    id: 103,
+                    title: "말해줘요"
+                }, {
+                    id: 228,
+                    title: "아파트"
+                }, {
+                    id: 203,
+                    title: "마그네틱"
+                }];
+                this.currentResults = [...this.musicData];
+            }
+            showLoading(show) {
+                const loading = document.getElementById('loadingMessage');
+                const grid = document.getElementById('musicGrid');
+                const empty = document.getElementById('emptyMessage');
+                const error = document.getElementById('errorMessage');
+                if (show) {
+                    loading.style.display = 'block';
+                    grid.style.display = 'none';
+                    empty.style.display = 'none';
+                    error.style.display = 'none';
+                } else {
+                    loading.style.display = 'none';
+                }
+            }
+            showError(show) {
+                const error = document.getElementById('errorMessage');
+                const grid = document.getElementById('musicGrid');
+                const empty = document.getElementById('emptyMessage');
+                const loading = document.getElementById('loadingMessage');
+                if (show) {
+                    error.style.display = 'block';
+                    grid.style.display = 'none';
+                    empty.style.display = 'none';
+                    loading.style.display = 'none';
+                } else {
+                    error.style.display = 'none';
+                }
+            }
             setupEvents() {
                 const input = document.getElementById('queryInput');
-
                 input.addEventListener('input', this.debouncedSearch);
                 input.addEventListener('keydown', (e) => {
                     if (e.key === 'Escape') this.clearSearch();
@@ -328,16 +399,13 @@
             performSearch() {
                 const query = document.getElementById('queryInput').value.trim();
                 localStorage.setItem('mf:lastQuery', query);
-
                 if (!query) {
                     this.currentResults = [...this.musicData];
                     this.updateQueryInfo('');
                     this.renderResults('');
                     return;
                 }
-
                 const isNumericQuery = /^\d+$/.test(query);
-
                 this.currentResults = this.musicData.filter((track) => {
                     if (isNumericQuery) {
                         // 숫자(갯수) 검색: 부분일치
@@ -351,12 +419,10 @@
                         return inTitle || inAlias;
                     }
                 });
-
                 const searchType = isNumericQuery ? '갯수' : '텍스트/별명';
                 this.updateQueryInfo(`"${query}" ${searchType} 검색`);
                 this.renderResults(query);
             }
-
             clearSearch() {
                 const input = document.getElementById('queryInput');
                 input.value = '';
@@ -366,82 +432,65 @@
                 this.renderResults('');
                 this.focusSearchInput();
             }
-
             updateQueryInfo(msg) {
                 document.getElementById('queryInfo').textContent = msg;
             }
-
             renderResults(highlightTerm = '') {
                 const gridContent = document.getElementById('gridContent');
                 const musicGrid = document.getElementById('musicGrid');
                 const emptyMessage = document.getElementById('emptyMessage');
                 const resultCount = document.getElementById('resultCount');
-
                 resultCount.textContent = `총 ${this.currentResults.length}개의 곡이 있습니다.`;
                 gridContent.innerHTML = '';
-
                 if (this.currentResults.length === 0) {
                     musicGrid.style.display = 'none';
                     emptyMessage.style.display = 'block';
                     return;
                 }
-
                 musicGrid.style.display = 'block';
                 emptyMessage.style.display = 'none';
-
                 const frag = document.createDocumentFragment();
                 const isNum = /^\d+$/.test(highlightTerm);
-                const qNum = isNum ? parseInt(highlightTerm, 10) : null;
-
                 this.currentResults.forEach((track) => {
                     const row = document.createElement('div');
                     row.className = 'grid-row';
                     row.setAttribute('role', 'row');
-
                     const numCell = document.createElement('div');
                     numCell.className = 'number-cell';
                     numCell.setAttribute('role', 'cell');
-
                     const titleCell = document.createElement('div');
                     titleCell.className = 'title-cell';
                     titleCell.setAttribute('role', 'cell');
-
                     // 갯수 하이라이트 (부분 일치 기준)
                     if (isNum && String(track.id).includes(highlightTerm)) {
                         this.applySafeHighlight(numCell, String(track.id), highlightTerm);
                     } else {
                         numCell.textContent = String(track.id);
                     }
-
                     // 제목 하이라이트 (안전 처리)
                     if (!isNum && highlightTerm) {
                         this.applySafeHighlight(titleCell, track.title, highlightTerm);
                     } else {
                         titleCell.textContent = track.title;
                     }
-
                     row.appendChild(numCell);
                     row.appendChild(titleCell);
                     frag.appendChild(row);
                 });
-
                 gridContent.appendChild(frag);
             }
-
             // 문자열 포함 여부 (한글/대소문자 구분 완화)
             includesSafe(text, query) {
                 if (typeof text !== 'string') return false;
                 return text.toLowerCase().includes(query.toLowerCase()) ||
                     this.collator.compare(text, query) === 0;
             }
-
             // 안전한 하이라이트: 텍스트 노드를 분할하여 span 삽입
             applySafeHighlight(container, text, term) {
                 const lower = String(text).toLowerCase();
                 const t = String(term).toLowerCase();
                 let start = 0;
                 let idx = lower.indexOf(t);
-
                 while (idx !== -1) {
                     if (idx > start) {
                         container.appendChild(document.createTextNode(text.slice(start, idx)));
@@ -450,7 +499,6 @@
                     mark.className = 'match-highlight';
                     mark.textContent = text.slice(idx, idx + t.length);
                     container.appendChild(mark);
-
                     start = idx + t.length;
                     idx = lower.indexOf(t, start);
                 }
@@ -458,7 +506,6 @@
                     container.appendChild(document.createTextNode(text.slice(start)));
                 }
             }
-
             // 디바운스 유틸
             debounce(fn, delay = 250) {
                 let timer = null;
@@ -467,14 +514,11 @@
                     timer = setTimeout(() => fn.apply(this, args), delay);
                 };
             }
-
             focusSearchInput() {
                 document.getElementById('queryInput').focus();
             }
         }
-
         document.addEventListener('DOMContentLoaded', () => new MusicFinder());
     </script>
 </body>
-
 </html>
