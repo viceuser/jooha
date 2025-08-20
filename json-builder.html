@@ -56,6 +56,23 @@
             const entriesTbody = document.getElementById('entries');
             const jsonOutput = document.getElementById('jsonOutput');
             const fileInput = document.getElementById('fileInput');
+            const importLogPanel = document.getElementById('importLogPanel');
+            const importLog = document.getElementById('importLog');
+            const clearLogBtn = document.getElementById('clearLogBtn');
+
+            function logInit() {
+                if (importLog) importLog.value = '';
+                if (importLogPanel) importLogPanel.style.display = 'none';
+            }
+            function logShow() {
+                if (importLogPanel) importLogPanel.style.display = '';
+            }
+            function logAppend(lineText) {
+                if (!importLog) return;
+                importLog.value += (importLog.value ? "\n" : '') + lineText;
+                logShow();
+            }
+            if (clearLogBtn) clearLogBtn.addEventListener('click', () => { if (importLog) importLog.value = ''; });
 
             function parseAlias(aliasRaw) {
                 const trimmed = String(aliasRaw || '').trim();
@@ -176,11 +193,40 @@
                 updateAll();
             }
 
-            function importJsonFile(file) {
+            // 파일 텍스트를 UTF-8/UTF-16LE/UTF-16BE 자동 판별로 읽기
+            function readFileAsTextSmart(file, onText) {
                 const reader = new FileReader();
                 reader.onload = () => {
                     try {
-                        const parsed = JSON.parse(reader.result);
+                        const buf = new Uint8Array(reader.result);
+                        if (buf.length >= 2 && buf[0] === 0xFF && buf[1] === 0xFE) {
+                            // UTF-16LE BOM
+                            const text = new TextDecoder('utf-16le').decode(buf);
+                            onText(text.replace(/^\uFEFF/, ''));
+                            return;
+                        }
+                        if (buf.length >= 2 && buf[0] === 0xFE && buf[1] === 0xFF) {
+                            // UTF-16BE BOM
+                            const text = new TextDecoder('utf-16be').decode(buf);
+                            onText(text.replace(/^\uFEFF/, ''));
+                            return;
+                        }
+                        // 기본: UTF-8 (BOM 제거)
+                        const text = new TextDecoder('utf-8').decode(buf);
+                        onText(text.replace(/^\uFEFF/, ''));
+                    } catch (e) {
+                        alert('파일 디코딩 오류: ' + e.message);
+                    }
+                };
+                reader.onerror = () => alert('파일 읽기 오류. 다시 시도하세요.');
+                reader.readAsArrayBuffer(file);
+            }
+
+            function importJsonFile(file) {
+                readFileAsTextSmart(file, (text) => {
+                    try {
+                        logInit();
+                        const parsed = JSON.parse(text);
                         if (!Array.isArray(parsed)) throw new Error('배열 형태의 JSON이 아닙니다.');
                         // 유효성 간단 체크 및 정규화
                         const normalized = parsed.map(item => {
@@ -197,8 +243,7 @@
                     } catch (e) {
                         alert('JSON 파싱 오류: ' + e.message);
                     }
-                };
-                reader.readAsText(file, 'utf-8');
+                });
             }
 
             function guessDelimiter(sampleLine) {
@@ -259,17 +304,63 @@
                 const raw = String(aliasValue || '').trim();
                 if (!raw) return undefined;
                 // alias 구분자는 콤마/세미콜론/수직바/슬래시 허용
-                const parts = raw.split(/[,;|\/]/).map(s => s.trim()).filter(Boolean);
+                let parts = raw.split(/[,;|\/]/).map(s => s.trim()).filter(Boolean);
+                // CSV에서 하나의 셀에 공백으로만 구분된 경우도 지원
+                if (parts.length <= 1) {
+                    const wsParts = raw.split(/\s+/).map(s => s.trim()).filter(Boolean);
+                    if (wsParts.length > 1) parts = wsParts;
+                }
                 return parts.length > 0 ? parts : undefined;
             }
 
+            // 자유 형식 한 줄에서 id/title/alias 추출 (숫자 주변 구분자 허용)
+            function parseFreeformLine(line) {
+                const raw = String(line || '').trim();
+                if (!raw) return null;
+                const m = raw.match(/(\d+)/);
+                if (!m) return null;
+                const idStr = m[1];
+                const idNum = Number(idStr);
+                if (!Number.isInteger(idNum) || idNum <= 0) return null;
+                const idPos = m.index;
+                const before = raw.slice(0, idPos).trim().replace(/[\s,;|\/]+$/, '');
+                if (!before) return null;
+                const after = raw.slice(idPos + idStr.length).trim();
+                const aliasTokens = after ? after.replace(/^"|"$/g, '').split(/[\s,;|\/]+/).map(s => s.trim()).filter(Boolean) : [];
+                return aliasTokens.length > 0 ? { id: idNum, title: before, alias: aliasTokens } : { id: idNum, title: before };
+            }
+
             function importTextFile(file) {
-                const reader = new FileReader();
-                reader.onload = () => {
+                readFileAsTextSmart(file, (text) => {
                     try {
-                        const text = String(reader.result || '');
+                        logInit();
+                        text = String(text || '');
                         const rows = parseDelimited(text);
                         if (rows.length === 0) throw new Error('내용이 비어 있습니다.');
+
+                        // 공백 기반 단일 컬럼 텍스트 라인만 있는 경우 폴백 파서 적용
+                        // 예: "피카츄 49 or 100 whistle" 형태 (제목 + 공백 + 숫자id + 나머지 토큰은 별칭)
+                        if (rows.every(r => r.length === 1)) {
+                            const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+                            const imported = [];
+                            let skipped = 0;
+                            for (let i = 0; i < lines.length; i++) {
+                                const line = lines[i];
+                                const parsed = parseFreeformLine(line);
+                                if (!parsed) {
+                                    skipped++;
+                                    logAppend(`라인 ${i+1}: 규칙 불일치로 건너뜀 → "${(line||'').slice(0,80)}${(line||'').length>80?'...':''}"`);
+                                    continue;
+                                }
+                                imported.push(parsed);
+                            }
+                            if (imported.length === 0) throw new Error('가져올 유효한 행이 없습니다.');
+                            state.entries = imported;
+                            updateAll();
+                            const msg = `불러오기 완료: ${imported.length}개 항목` + (skipped ? ` (건너뜀: ${skipped})` : '');
+                            alert(msg);
+                            return;
+                        }
 
                         // 헤더 감지
                         const header = rows[0].map(s => String(s || '').trim().toLowerCase());
@@ -287,7 +378,7 @@
                         let skipped = 0;
                         for (let r = startIndex; r < rows.length; r++) {
                             const cols = rows[r];
-                            if (!cols || cols.length === 0) { skipped++; continue; }
+                            if (!cols || cols.length === 0) { skipped++; logAppend(`라인 ${r+1}: 빈 행`); continue; }
                             const idVal = cols[idIdx] != null ? cols[idIdx] : '';
                             const titleVal = cols[titleIdx] != null ? cols[titleIdx] : '';
                             const aliasVal = (aliasIdx >= 0 && cols[aliasIdx] != null) ? cols[aliasIdx] : '';
@@ -296,11 +387,35 @@
                             const title = String(titleVal || '').trim();
                             const alias = normalizeAlias(aliasVal);
 
-                            if (!Number.isInteger(id) || id <= 0 || !title) { skipped++; continue; }
+                            if (!Number.isInteger(id) || id <= 0 || !title) {
+                                skipped++;
+                                const reason = !Number.isInteger(id) || id <= 0 ? 'id 오류' : 'title 누락';
+                                logAppend(`라인 ${r+1}: ${reason} → [id="${idVal}", title="${titleVal}"]`);
+                                continue;
+                            }
                             imported.push(alias ? { id, title, alias } : { id, title });
                         }
 
-                        if (imported.length === 0) throw new Error('가져올 유효한 행이 없습니다.');
+                        if (imported.length === 0) {
+                            // CSV/TSV 규칙으로는 못 읽었을 때, 공백 기반 라인 파서를 최후 시도로 적용
+                            const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+                            const wsImported = [];
+                            let wsSkipped = 0;
+                            for (let i = 0; i < lines.length; i++) {
+                                const line = lines[i];
+                                const parsed = parseFreeformLine(line);
+                                if (!parsed) { wsSkipped++; logAppend(`라인 ${i+1}: 폴백 규칙 불일치`); continue; }
+                                wsImported.push(parsed);
+                            }
+                            if (wsImported.length > 0) {
+                                state.entries = wsImported;
+                                updateAll();
+                                const msg = `불러오기 완료: ${wsImported.length}개 항목` + (wsSkipped ? ` (건너뜀: ${wsSkipped})` : '');
+                                alert(msg);
+                                return;
+                            }
+                            throw new Error('가져올 유효한 행이 없습니다.');
+                        }
                         state.entries = imported;
                         updateAll();
                         const msg = `불러오기 완료: ${imported.length}개 항목` + (skipped ? ` (건너뜀: ${skipped})` : '');
@@ -308,8 +423,7 @@
                     } catch (e) {
                         alert('CSV/TXT 파싱 오류: ' + e.message);
                     }
-                };
-                reader.readAsText(file, 'utf-8');
+                });
             }
 
             // Event wiring
@@ -392,6 +506,14 @@
             </div>
             <div class="toolbar" style="margin-top: .8rem;">
                 <button id="resetBtn" class="btn" type="button">목록 비우기</button>
+            </div>
+        </div>
+
+        <div class="panel" id="importLogPanel" style="display:none">
+            <label for="importLog">가져오기 로그 (건너뛰기 내역)</label>
+            <textarea id="importLog" readonly></textarea>
+            <div class="toolbar" style="margin-top: .8rem;">
+                <button id="clearLogBtn" class="btn" type="button">로그 지우기</button>
             </div>
         </div>
 
