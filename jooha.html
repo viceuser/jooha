@@ -278,14 +278,21 @@
             }
 
             async loadMusicData() {
+                let candidates = [];
                 try {
                     const params = new URLSearchParams(location.search);
                     const base = params.get('list') || './list.json';
                     const ts = `t=${Date.now()}`;
                     const addBuster = (u) => u + (u.includes('?') ? '&' : '?') + ts;
-                    const candidates = /^https?:\/\//i.test(base)
+                    candidates = /^https?:\/\//i.test(base)
                         ? [addBuster(base)]
-                        : [addBuster(base), addBuster('./list.json'), addBuster('list.json'), addBuster('../list.json')];
+                        : [
+                            addBuster(base),
+                            addBuster('./list.json'),
+                            addBuster('list.json'),
+                            addBuster('../list.json'),
+                            addBuster('/list.json')
+                        ];
 
                     const data = await this.fetchJsonCandidates(candidates);
                     if (!Array.isArray(data)) throw new Error('list.json 형식 오류');
@@ -297,7 +304,7 @@
                     if (location.protocol === 'file:') {
                         this.showLoadError('파일로 직접 열면 목록 파일을 불러올 수 없습니다. 간단 서버로 열어주세요. (예: python -m http.server)');
                     } else {
-                        this.showLoadError('목록 파일(list.json)을 불러오지 못했습니다. 경로/서버 설정을 확인하세요.');
+                        this.showLoadError(`목록 파일(list.json)을 불러오지 못했습니다.\n시도 경로:\n${candidates.join('\n')}\n오류: ${error.message}`);
                     }
                 }
                 this.currentResults = [...this.musicData];
