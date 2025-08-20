@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JSON 빌더 (id, title, alias)</title>
+    <style>
+        * { box-sizing: border-box }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #fff0f6;
+            color: #d6336c;
+            padding: 2rem;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 64rem;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: 0 1rem 3rem rgba(214, 51, 108, 0.08);
+        }
+        h1 { margin: 0 0 1rem; font-weight: 300; letter-spacing: 1px; }
+        .row { display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; }
+        .field { display: flex; flex-direction: column; gap: .4rem; flex: 1; min-width: 10rem; }
+        label { font-size: .9rem; color: #c2255c; }
+        input[type="text"], input[type="number"] {
+            padding: .7rem .9rem;
+            background: #fff0f6;
+            border: 2px solid #ffb3c6;
+            border-radius: .5rem;
+            color: #d6336c;
+            font-size: 1rem;
+        }
+        input:focus { outline: none; border-color: #d6336c; box-shadow: 0 0 10px rgba(214, 51, 108, .15) }
+        .btn { padding: .7rem 1rem; border: none; border-radius: .5rem; background: #ffb3c6; color: #fff; cursor: pointer; }
+        .btn:hover { background: #d6336c }
+        .toolbar { display: flex; gap: .75rem; flex-wrap: wrap; }
+        .panel { background: #ffe0ef; border: 1px solid #ffb3c6; border-radius: .5rem; padding: 1rem; margin: 1rem 0; }
+        table { width: 100%; border-collapse: collapse; background: #fff; }
+        th, td { border-bottom: 1px solid #ffb3c6; text-align: left; padding: .6rem .5rem; }
+        th { background: #ffe0ef; position: sticky; top: 0; z-index: 1; }
+        .table-wrap { max-height: 280px; overflow: auto; border: 1px solid #ffb3c6; border-radius: .5rem; }
+        textarea { width: 100%; min-height: 220px; padding: .8rem; background: #fff0f6; border: 2px solid #ffb3c6; border-radius: .5rem; color: #d6336c; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+        .hint { font-size: .85rem; color: #c2255c; }
+    </style>
+    <!-- 순수 JS만 사용 -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const state = { entries: [] };
+
+            const idInput = document.getElementById('id');
+            const titleInput = document.getElementById('title');
+            const aliasInput = document.getElementById('alias');
+            const entriesTbody = document.getElementById('entries');
+            const jsonOutput = document.getElementById('jsonOutput');
+            const fileInput = document.getElementById('fileInput');
+
+            function parseAlias(aliasRaw) {
+                const trimmed = String(aliasRaw || '').trim();
+                if (!trimmed) return [];
+                return trimmed.split(',').map(s => s.trim()).filter(Boolean);
+            }
+
+            function renderTable() {
+                entriesTbody.innerHTML = '';
+                state.entries.forEach((e, idx) => {
+                    const tr = document.createElement('tr');
+                    const tdId = document.createElement('td');
+                    const tdTitle = document.createElement('td');
+                    const tdAlias = document.createElement('td');
+                    const tdActions = document.createElement('td');
+
+                    tdId.textContent = String(e.id);
+                    tdTitle.textContent = e.title;
+                    tdAlias.textContent = Array.isArray(e.alias) ? e.alias.join(', ') : '';
+
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'btn';
+                    delBtn.textContent = '삭제';
+                    delBtn.addEventListener('click', () => {
+                        state.entries.splice(idx, 1);
+                        updateAll();
+                    });
+                    tdActions.appendChild(delBtn);
+
+                    tr.appendChild(tdId);
+                    tr.appendChild(tdTitle);
+                    tr.appendChild(tdAlias);
+                    tr.appendChild(tdActions);
+                    entriesTbody.appendChild(tr);
+                });
+            }
+
+            function toJsonArray() {
+                // alias는 비어있으면 생략
+                return state.entries.map(e => {
+                    const { id, title, alias } = e;
+                    if (Array.isArray(alias) && alias.length > 0) {
+                        return { id, title, alias };
+                    }
+                    return { id, title };
+                });
+            }
+
+            function updateJson() {
+                const arr = toJsonArray();
+                jsonOutput.value = JSON.stringify(arr, null, 2);
+            }
+
+            function updateAll() {
+                // id 오름차순 정렬 유지
+                state.entries.sort((a, b) => a.id - b.id);
+                renderTable();
+                updateJson();
+            }
+
+            function clearInputs() {
+                idInput.value = '';
+                titleInput.value = '';
+                aliasInput.value = '';
+                idInput.focus();
+            }
+
+            function addEntry() {
+                const rawId = String(idInput.value || '').trim();
+                const title = String(titleInput.value || '').trim();
+                const aliasList = parseAlias(aliasInput.value);
+
+                const idNum = Number(rawId);
+                if (!Number.isInteger(idNum) || idNum <= 0) {
+                    alert('유효한 숫자 id를 입력하세요.');
+                    idInput.focus();
+                    return;
+                }
+                if (!title) {
+                    alert('title을 입력하세요.');
+                    titleInput.focus();
+                    return;
+                }
+                if (state.entries.some(e => e.id === idNum)) {
+                    alert('이미 존재하는 id입니다.');
+                    idInput.focus();
+                    return;
+                }
+
+                const entry = { id: idNum, title };
+                if (aliasList.length > 0) entry.alias = aliasList;
+                state.entries.push(entry);
+                updateAll();
+                clearInputs();
+            }
+
+            function copyJson() {
+                jsonOutput.select();
+                document.execCommand('copy');
+                alert('JSON이 클립보드에 복사되었습니다.');
+            }
+
+            function downloadJson() {
+                const blob = new Blob([jsonOutput.value], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'list.json';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            }
+
+            function resetList() {
+                if (!confirm('목록을 모두 비울까요?')) return;
+                state.entries = [];
+                updateAll();
+            }
+
+            function importJsonFile(file) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    try {
+                        const parsed = JSON.parse(reader.result);
+                        if (!Array.isArray(parsed)) throw new Error('배열 형태의 JSON이 아닙니다.');
+                        // 유효성 간단 체크 및 정규화
+                        const normalized = parsed.map(item => {
+                            const id = Number(item.id);
+                            const title = String(item.title || '').trim();
+                            const alias = Array.isArray(item.alias) ? item.alias.filter(Boolean).map(String) : undefined;
+                            if (!Number.isInteger(id) || id <= 0 || !title) throw new Error('id/title 형식 오류');
+                            return alias && alias.length > 0 ? { id, title, alias } : { id, title };
+                        });
+                        // 중복 id 제거 및 병합 금지: 새로 교체
+                        state.entries = normalized;
+                        updateAll();
+                        alert('JSON을 불러왔습니다.');
+                    } catch (e) {
+                        alert('JSON 파싱 오류: ' + e.message);
+                    }
+                };
+                reader.readAsText(file, 'utf-8');
+            }
+
+            function guessDelimiter(sampleLine) {
+                if (sampleLine.indexOf('\t') !== -1) return '\t';
+                // 세미콜론 CSV (엑셀 지역설정)
+                const commaCount = (sampleLine.match(/,/g) || []).length;
+                const semiCount = (sampleLine.match(/;/g) || []).length;
+                return semiCount > commaCount ? ';' : ',';
+            }
+
+            function parseDelimited(text, explicitDelimiter) {
+                const input = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+                const delimiter = explicitDelimiter || guessDelimiter(input.split('\n')[0] || '');
+                const rows = [];
+                let field = '';
+                let row = [];
+                let inQuotes = false;
+                for (let i = 0; i < input.length; i++) {
+                    const ch = input[i];
+                    const next = input[i + 1];
+                    if (inQuotes) {
+                        if (ch === '"' && next === '"') { // 이스케이프된 따옴표
+                            field += '"';
+                            i++;
+                        } else if (ch === '"') {
+                            inQuotes = false;
+                        } else {
+                            field += ch;
+                        }
+                    } else {
+                        if (ch === '"') {
+                            inQuotes = true;
+                        } else if (ch === delimiter) {
+                            row.push(field);
+                            field = '';
+                        } else if (ch === '\n') {
+                            row.push(field);
+                            rows.push(row);
+                            row = [];
+                            field = '';
+                        } else {
+                            field += ch;
+                        }
+                    }
+                }
+                // 마지막 필드/행
+                if (inQuotes) {
+                    // 닫히지 않은 따옴표: 남은 것을 필드로 처리
+                }
+                row.push(field);
+                if (row.length > 1 || (row.length === 1 && row[0].trim().length > 0)) {
+                    rows.push(row);
+                }
+                return rows;
+            }
+
+            function normalizeAlias(aliasValue) {
+                const raw = String(aliasValue || '').trim();
+                if (!raw) return undefined;
+                // alias 구분자는 콤마/세미콜론/수직바/슬래시 허용
+                const parts = raw.split(/[,;|\/]/).map(s => s.trim()).filter(Boolean);
+                return parts.length > 0 ? parts : undefined;
+            }
+
+            function importTextFile(file) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    try {
+                        const text = String(reader.result || '');
+                        const rows = parseDelimited(text);
+                        if (rows.length === 0) throw new Error('내용이 비어 있습니다.');
+
+                        // 헤더 감지
+                        const header = rows[0].map(s => String(s || '').trim().toLowerCase());
+                        const hasHeader = header.includes('id') && header.includes('title');
+                        const startIndex = hasHeader ? 1 : 0;
+
+                        let idIdx = 0, titleIdx = 1, aliasIdx = 2;
+                        if (hasHeader) {
+                            idIdx = header.indexOf('id');
+                            titleIdx = header.indexOf('title');
+                            aliasIdx = header.indexOf('alias'); // 없으면 -1
+                        }
+
+                        const imported = [];
+                        let skipped = 0;
+                        for (let r = startIndex; r < rows.length; r++) {
+                            const cols = rows[r];
+                            if (!cols || cols.length === 0) { skipped++; continue; }
+                            const idVal = cols[idIdx] != null ? cols[idIdx] : '';
+                            const titleVal = cols[titleIdx] != null ? cols[titleIdx] : '';
+                            const aliasVal = (aliasIdx >= 0 && cols[aliasIdx] != null) ? cols[aliasIdx] : '';
+
+                            const id = Number(String(idVal).trim());
+                            const title = String(titleVal || '').trim();
+                            const alias = normalizeAlias(aliasVal);
+
+                            if (!Number.isInteger(id) || id <= 0 || !title) { skipped++; continue; }
+                            imported.push(alias ? { id, title, alias } : { id, title });
+                        }
+
+                        if (imported.length === 0) throw new Error('가져올 유효한 행이 없습니다.');
+                        state.entries = imported;
+                        updateAll();
+                        const msg = `불러오기 완료: ${imported.length}개 항목` + (skipped ? ` (건너뜀: ${skipped})` : '');
+                        alert(msg);
+                    } catch (e) {
+                        alert('CSV/TXT 파싱 오류: ' + e.message);
+                    }
+                };
+                reader.readAsText(file, 'utf-8');
+            }
+
+            // Event wiring
+            document.getElementById('addBtn').addEventListener('click', addEntry);
+            document.getElementById('clearBtn').addEventListener('click', clearInputs);
+            document.getElementById('copyBtn').addEventListener('click', copyJson);
+            document.getElementById('downloadBtn').addEventListener('click', downloadJson);
+            document.getElementById('resetBtn').addEventListener('click', resetList);
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (file) {
+                    const name = (file.name || '').toLowerCase();
+                    if (name.endsWith('.json')) {
+                        importJsonFile(file);
+                    } else if (name.endsWith('.csv') || name.endsWith('.tsv') || name.endsWith('.txt')) {
+                        importTextFile(file);
+                    } else {
+                        // MIME 타입으로 보조 판정
+                        const type = (file.type || '').toLowerCase();
+                        if (type.includes('json')) importJsonFile(file);
+                        else importTextFile(file);
+                    }
+                }
+                fileInput.value = '';
+            });
+
+            // Enter 키로 추가
+            [idInput, titleInput, aliasInput].forEach(el => {
+                el.addEventListener('keydown', (e) => { if (e.key === 'Enter') addEntry(); });
+            });
+
+            // 초기 렌더
+            updateAll();
+            idInput.focus();
+        });
+    </script>
+    <!-- 크롬 등에서 file://로 열어도 동작합니다 -->
+</head>
+<body>
+    <div class="container">
+        <h1>JSON 빌더</h1>
+        <p class="hint">id, title, alias(쉼표로 구분)를 입력하고 추가하세요. 아래 JSON은 <strong>현재 list.json 형식</strong>으로 실시간 생성됩니다.</p>
+
+        <div class="panel">
+            <div class="row">
+                <div class="field">
+                    <label for="id">id (숫자)</label>
+                    <input id="id" type="number" inputmode="numeric" placeholder="예: 106" />
+                </div>
+                <div class="field">
+                    <label for="title">title (제목)</label>
+                    <input id="title" type="text" placeholder="예: 호시탐탐" />
+                </div>
+                <div class="field">
+                    <label for="alias">alias (쉼표로 구분, 선택)</label>
+                    <input id="alias" type="text" placeholder="예: 별칭1, 별칭2" />
+                </div>
+            </div>
+            <div class="toolbar" style="margin-top: .8rem;">
+                <button id="addBtn" class="btn" type="button">추가</button>
+                <button id="clearBtn" class="btn" type="button">입력 지우기</button>
+                <input id="fileInput" type="file" accept="application/json,.csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain" style="display:none" />
+                <button class="btn" type="button" onclick="document.getElementById('fileInput').click()">가져오기 (JSON/CSV/TXT)</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 90px;">id</th>
+                            <th>title</th>
+                            <th>alias</th>
+                            <th style="width: 90px;">액션</th>
+                        </tr>
+                    </thead>
+                    <tbody id="entries"></tbody>
+                </table>
+            </div>
+            <div class="toolbar" style="margin-top: .8rem;">
+                <button id="resetBtn" class="btn" type="button">목록 비우기</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <label for="jsonOutput">JSON 미리보기</label>
+            <textarea id="jsonOutput" readonly></textarea>
+            <div class="toolbar" style="margin-top: .8rem;">
+                <button id="copyBtn" class="btn" type="button">JSON 복사</button>
+                <button id="downloadBtn" class="btn" type="button">JSON 다운로드</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+
+
