@@ -101,6 +101,17 @@
             gap: 1rem;
             flex-wrap: wrap
         }
+
+        .admin-link {
+            color: #c2255c;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .admin-link:hover {
+            color: #d6336c;
+            text-decoration: underline;
+        }
         
         .data-grid {
             background: #fff0f6;
@@ -277,7 +288,10 @@
         </div>
         <div class="info-bar">
             <span id="resultCount" aria-live="polite">총 0개의 곡이 있습니다.</span>
-            <span id="queryInfo" aria-live="polite"></span>
+            <span>
+                <span id="queryInfo" aria-live="polite"></span>
+                <a class="admin-link" href="admin.html">관리</a>
+            </span>
         </div>
         <div class="data-grid" id="musicGrid" role="region" aria-label="검색 결과">
             <div class="grid-header" role="row">
